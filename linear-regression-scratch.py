@@ -2,6 +2,10 @@ import random
 import torch
 from d2l import torch as d2l
 
+'''
+在反向传播时，如何只计算w, b的grad
+'''
+
 
 def synthetic_data(w, b, num_examples):  # @save
     """生成y=Xw+b+噪声"""
@@ -18,7 +22,7 @@ features, labels = synthetic_data(true_w, true_b, 1000)
 print('features:', features[0], '\nlabel:', labels[0])
 
 d2l.set_figsize()
-d2l.plt.scatter(features[:, 1].detach().numpy(), labels.detach().numpy(), 1);
+d2l.plt.scatter(features[:, 1].detach().numpy(), labels.detach().numpy(), 1)  # .detach()的作用是将tensor从计算图中脱离出来（即不计算梯度）
 
 d2l.plt.show()
 
@@ -31,7 +35,7 @@ def data_iter(batch_size, features, labels):
     for i in range(0, num_examples, batch_size):
         batch_indices = torch.tensor(
             indices[i: min(i + batch_size, num_examples)])
-        yield features[batch_indices], labels[batch_indices]
+        yield features[batch_indices], labels[batch_indices]  # 每次返回变量时，不清理局部变量
 
 
 batch_size = 10
@@ -40,7 +44,7 @@ for X, y in data_iter(batch_size, features, labels):
     print(X, '\n', y)
     break
 
-w = torch.normal(0, 0.01, size=(2, 1), requires_grad=True)
+w = torch.normal(0, 0.01, size=(2, 1), requires_grad=True)   # 这里说明需要反向求导
 b = torch.zeros(1, requires_grad=True)
 
 
@@ -58,14 +62,16 @@ def sgd(params, lr, batch_size):  # @save
     """小批量随机梯度下降"""
     with torch.no_grad():
         for param in params:
-            param -= lr * param.grad / batch_size
+            param -= lr * param.grad / batch_size   # 关键就是param.grad的值
             param.grad.zero_()
 
 
-lr = 0.03
+lr = 0.03  # 学习率
 num_epochs = 3
 net = linreg
 loss = squared_loss
+
+num = 0
 
 for epoch in range(num_epochs):
     for X, y in data_iter(batch_size, features, labels):
@@ -74,7 +80,8 @@ for epoch in range(num_epochs):
         # 并以此计算关于[w,b]的梯度
         l.sum().backward()
         sgd([w, b], lr, batch_size)  # 使用参数的梯度更新参数
-    with torch.no_grad():
+        num += 1
+    with torch.no_grad():  # 在该模块下，所有计算得出的tensor的requires_grad都自动设置为False。
         train_l = loss(net(features, w, b), labels)
         print(f'epoch {epoch + 1}, loss {float(train_l.mean()):f}')
 
